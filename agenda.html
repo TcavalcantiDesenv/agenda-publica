@@ -79,7 +79,7 @@
       modalOpen: false,
       selectedDate: null,
       form: { cliente: '', atividade: '', hora: '09:00' },
-      corretorId: getQueryParamInt('corretorId'),
+      corretorid: getQueryParamInt('corretorid'),
       editingId: null // quando não-null, modal está em modo edição
     };
 
@@ -89,7 +89,7 @@
     function stableHash(str){ let h=2166136261; for(let i=0;i<str.length;i++){ h^=str.charCodeAt(i); h+= (h<<1)+(h<<4)+(h<<7)+(h<<8)+(h<<24);} return h>>>0; }
     const gradientClasses = ['grad-violet','grad-green','grad-sky','grad-rose','grad-amber','grad-teal','grad-indigo','grad-pink'];
     function colorForItem(it){
-      const key = `${it.id||''}|${it.Cliente||''}|${it.Atividade||''}|${it.corretorId||''}`;
+      const key = `${it.id||''}|${it.Cliente||''}|${it.Atividade||''}|${it.corretorid||''}`;
       const idx = stableHash(key) % gradientClasses.length;
       return gradientClasses[idx];
     }
@@ -129,7 +129,7 @@
         Atividade: state.form.atividade || null,
         Ativo: true,
         DataAgendada: when.toISOString().slice(0,19),
-        corretorId: state.corretorId
+        corretorid: state.corretorid
       };
       if(state.editingId){
         const { data, error } = await supabase.from('Agenda').update(payload).eq('id', state.editingId).select('*').single();
@@ -356,7 +356,7 @@
               <button class="px-4 py-2 rounded-lg bg-gray-700 text-gray-200" data-action="close-modal">Cancelar</button>
               <button class="px-4 py-2 rounded-lg btn-primary text-white" data-action="save">${state.editingId? 'Atualizar' : 'Salvar'}</button>
             </div>
-            ${state.corretorId==null?'<div class="mt-3 text-xs text-yellow-400">Dica: passe ?corretorId=123 na URL para registrar o corretor.</div>':''}
+            ${state.corretorid==null?'<div class="mt-3 text-xs text-yellow-400">Dica: passe ?corretorid=123 na URL para registrar o corretor.</div>':''}
           </div>
         </div>
       `;
