@@ -66,7 +66,12 @@
       return weeks;
     }
 
-    function getQueryParamInt(name){ const v=new URLSearchParams(location.search).get(name); if(!v) return null; const n=Number(v); return Number.isFinite(n)?n:null; }
+    function getQueryParamInt(name){
+      // Aceita tanto ?corretorId= quanto o possível typo ?corrtorId=
+      const params = new URLSearchParams(location.search);
+      const raw = params.get(name) ?? params.get(name.replace('corretor','corrtor'));
+      if(!raw) return null; const n = Number(raw); return Number.isFinite(n)? n : null; 
+    }
 
     // === Estado ===
     const state = {
@@ -94,8 +99,8 @@
       return gradientClasses[idx];
     }
 
-    // CRUD Supabase
-    async function fetchRange(){
+        // CRUD Supabase
+async function fetchRange(){
       setState({ loading: true });
       let rangeStart, rangeEnd;
       if(state.view==='month'){
@@ -114,11 +119,14 @@
           .select('*')
           .gte('DataAgendada', rangeStart.toISOString().slice(0,19))
           .lte('DataAgendada', rangeEnd.toISOString().slice(0,19))
+          .eq('corretorId', state.corretorId) // filtra pelo corretor da URL
           .order('DataAgendada', { ascending: true });
         if(error) throw error;
         setState({ items: data||[], loading:false });
       }catch(e){ console.error(e); setState({ loading:false }); }
     }
+
+
 
     async function saveAgenda(){
       if(!state.selectedDate) return;
@@ -317,6 +325,7 @@
                 <button class="w-9 h-9 rounded-lg bg-gray-800 text-gray-300 hover:bg-gray-700" data-action="next">▶</button>
               </div>
               <div class="cal-title text-xl font-semibold">${currentLabel}</div>
+              <button class="btn-primary px-4 py-2 rounded-lg text-white font-medium flex items-center gap-2" data-action="open" data-date="${new Date().toISOString()}"><span class="text-lg">+</span> Adicionar</button>
             </div>
             <div class="flex items-center gap-2 mb-3">
               <div class="flex rounded-xl overflow-hidden border border-gray-700">
@@ -355,7 +364,7 @@
               <button class="px-4 py-2 rounded-lg bg-gray-700 text-gray-200" data-action="close-modal">Cancelar</button>
               <button class="px-4 py-2 rounded-lg btn-primary text-white" data-action="save">${state.editingId? 'Atualizar' : 'Salvar'}</button>
             </div>
-            ${state.corretorId==null?'<div class="mt-3 text-xs text-yellow-400">Dica: passe ?corretorId=123 na URL para registrar o corretor.</div>':''}
+            ${state.corretorId==null?'<div class="mt-3 text-xs text-yellow-400">Informe ?corretorId=NUMERO na URL para visualizar e salvar agendamentos.</div>':''}
           </div>
         </div>
       `;
