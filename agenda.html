@@ -90,6 +90,20 @@
 
     function setState(patch){ Object.assign(state, patch); render(); }
 
+    // === Funções de horário local (Brasília) ===
+    function fmtLocal(date){
+      const p = n => String(n).padStart(2,'0');
+      return `${date.getFullYear()}-${p(date.getMonth()+1)}-${p(date.getDate())} ${p(date.getHours())}:${p(date.getMinutes())}:${p(date.getSeconds())}`;
+    }
+    function parseSqlTS(ts){
+      if(!ts) return null;
+      const clean = ts.replace('T',' ').replace('Z','');
+      const [datePart, timePart = "00:00:00"] = clean.split(' ');
+      const [Y,M,D] = datePart.split('-').map(Number);
+      const [h,m,s] = timePart.split(':').map(x=>parseInt(x,10)||0);
+      return new Date(Y, (M||1)-1, D||1, h||0, m||0, s||0, 0); // local
+    }
+
     // Hash determinístico para colorir sempre igual por evento
     function stableHash(str){ let h=2166136261; for(let i=0;i<str.length;i++){ h^=str.charCodeAt(i); h+= (h<<1)+(h<<4)+(h<<7)+(h<<8)+(h<<24);} return h>>>0; }
     const gradientClasses = ['grad-violet','grad-green','grad-sky','grad-rose','grad-amber','grad-teal','grad-indigo','grad-pink'];
@@ -99,8 +113,8 @@
       return gradientClasses[idx];
     }
 
-        // CRUD Supabase
-async function fetchRange(){
+    // CRUD Supabase
+    async function fetchRange(){
       setState({ loading: true });
       let rangeStart, rangeEnd;
       if(state.view==='month'){
@@ -117,16 +131,14 @@ async function fetchRange(){
         const { data, error } = await supabase
           .from('Agenda')
           .select('*')
-          .gte('DataAgendada', rangeStart.toISOString().slice(0,19))
-          .lte('DataAgendada', rangeEnd.toISOString().slice(0,19))
+          .gte('DataAgendada', fmtLocal(rangeStart))   // << local
+          .lte('DataAgendada', fmtLocal(rangeEnd))     // << local
           .eq('corretorId', state.corretorId) // filtra pelo corretor da URL
           .order('DataAgendada', { ascending: true });
         if(error) throw error;
         setState({ items: data||[], loading:false });
       }catch(e){ console.error(e); setState({ loading:false }); }
     }
-
-
 
     async function saveAgenda(){
       if(!state.selectedDate) return;
@@ -136,7 +148,7 @@ async function fetchRange(){
         Cliente: state.form.cliente || null,
         Atividade: state.form.atividade || null,
         Ativo: true,
-        DataAgendada: when.toISOString().slice(0,19),
+        DataAgendada: fmtLocal(when), // << local (sem UTC)
         corretorId: state.corretorId
       };
       if(state.editingId){
@@ -162,8 +174,8 @@ async function fetchRange(){
     // Agrupa por dia
     function groupByDay(items){
       const map = new Map();
-      for(const it of items){ if(!it.DataAgendada) continue; const d=new Date(it.DataAgendada); const key=dayKey(d); if(!map.has(key)) map.set(key, []); map.get(key).push(it); }
-      for(const arr of map.values()) arr.sort((a,b)=> new Date(a.DataAgendada||0)-new Date(b.DataAgendada||0));
+      for(const it of items){ if(!it.DataAgendada) continue; const d=parseSqlTS(it.DataAgendada); const key=dayKey(d); if(!map.has(key)) map.set(key, []); map.get(key).push(it); }
+      for(const arr of map.values()) arr.sort((a,b)=> parseSqlTS(a.DataAgendada||0) - parseSqlTS(b.DataAgendada||0));
       return map;
     }
 
@@ -188,7 +200,7 @@ async function fetchRange(){
     function openModalFor(day, editing=null){
       if(editing){
         // preencher form com dados existentes
-        const d = new Date(editing.DataAgendada);
+        const d = parseSqlTS(editing.DataAgendada);
         const hh = String(d.getHours()).padStart(2,'0');
         const mm = String(d.getMinutes()).padStart(2,'0');
         setState({
@@ -243,7 +255,7 @@ async function fetchRange(){
               </div>
               <div class="flex flex-col gap-2">
                 ${daily.map(it=>{
-                  const d=it.DataAgendada?new Date(it.DataAgendada):null; const time=d?d.toTimeString().slice(0,5):'';
+                  const d=it.DataAgendada?parseSqlTS(it.DataAgendada):null; const time=d?d.toTimeString().slice(0,5):'';
                   return pillHtml(it, time);
                 }).join('')}
               </div>
@@ -270,7 +282,7 @@ async function fetchRange(){
               <div class="flex flex-col gap-2">
                 ${daily.length===0?'<div class="text-xs text-gray-400">Sem compromissos</div>':''}
                 ${daily.map(it=>{
-                  const d=it.DataAgendada?new Date(it.DataAgendada):null; const time=d?d.toTimeString().slice(0,5):'';
+                  const d=it.DataAgendada?parseSqlTS(it.DataAgendada):null; const time=d?d.toTimeString().slice(0,5):'';
                   return pillHtml(it, time);
                 }).join('')}
               </div>
@@ -282,7 +294,7 @@ async function fetchRange(){
       function dayGrid(){
         const key = dayKey(state.cursorDate); const daily=itemsByDay.get(key)||[];
         const events = daily.map(it=>{
-          const d=it.DataAgendada?new Date(it.DataAgendada):null; const hh=d?d.getHours():8; const mm=d?d.getMinutes():0; const top=((hh+mm/60)-8)*48;
+          const d=it.DataAgendada?parseSqlTS(it.DataAgendada):null; const hh=d?d.getHours():8; const mm=d?d.getMinutes():0; const top=((hh+mm/60)-8)*48;
           return `<div style="top:${top}px" class="absolute left-0 right-0 ml-1 mr-2">${pillHtml(it, d?d.toTimeString().slice(0,5):'')}</div>`
         }).join('');
         return `
@@ -386,7 +398,7 @@ async function fetchRange(){
           const id = Number(btn.getAttribute('data-id'));
           const it = state.items.find(x=> x.id === id);
           if(!it) return;
-          openModalFor(new Date(it.DataAgendada), it);
+          openModalFor(parseSqlTS(it.DataAgendada), it);
         };
       });
       app.querySelectorAll('[data-action="delete"]').forEach(btn=>{
